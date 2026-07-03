@@ -1,15 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { assessLoanApplication } from "@/lib/assess-loan";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User, Building2, IndianRupee, CreditCard, Calendar, Briefcase } from "lucide-react";
+import { Loader2, User, Building2, IndianRupee, CreditCard, Calendar, Briefcase, Server, Wifi, WifiOff } from "lucide-react";
+
+const API_BASE = "http://localhost:8000";
 
 const businessTypes = [
   "Retail",
@@ -29,7 +32,8 @@ export const LoanAssessmentForm = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
+
   const [formData, setFormData] = useState({
     applicantName: "",
     age: "",
@@ -42,6 +46,21 @@ export const LoanAssessmentForm = () => {
     loanTenureMonths: "",
     businessAgeMonths: "",
   });
+
+  // ── Check if the FastAPI backend is reachable ──────────────────
+  useEffect(() => {
+    const checkApi = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(3000) });
+        setApiStatus(res.ok ? "online" : "offline");
+      } catch {
+        setApiStatus("offline");
+      }
+    };
+    checkApi();
+    const interval = setInterval(checkApi, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,83 +78,139 @@ export const LoanAssessmentForm = () => {
 
       // Validations
       if (age < 18 || age > 80) {
-        toast({
-          title: "Invalid Age",
-          description: "Age must be between 18 and 80 years",
-          variant: "destructive",
-        });
+        toast({ title: "Invalid Age", description: "Age must be between 18 and 80 years", variant: "destructive" });
         setIsLoading(false);
         return;
       }
-
       if (cibilScore < 300 || cibilScore > 900) {
-        toast({
-          title: "Invalid CIBIL Score",
-          description: "CIBIL score must be between 300 and 900",
-          variant: "destructive",
-        });
+        toast({ title: "Invalid CIBIL Score", description: "CIBIL score must be between 300 and 900", variant: "destructive" });
         setIsLoading(false);
         return;
       }
-
       if (!formData.businessType) {
-        toast({
-          title: "Business Type Required",
-          description: "Please select a business type",
-          variant: "destructive",
-        });
+        toast({ title: "Business Type Required", description: "Please select a business type", variant: "destructive" });
         setIsLoading(false);
         return;
       }
 
-      // Call local ML assessment
-      const data = assessLoanApplication({
-        applicantName: formData.applicantName,
-        age,
-        businessType: formData.businessType,
-        monthlyRevenue,
-        annualRevenue,
-        existingLoans,
-        loanAmountRequested,
-        cibilScore,
-        loanTenureMonths,
-        businessAgeMonths,
-      });
+      // ── Try FastAPI backend first ──────────────────────────────
+      let data = null;
+      let usedApi = false;
 
-      // Store in localStorage for insights page
+      if (apiStatus === "online") {
+        try {
+          const apiRes = await fetch(`${API_BASE}/api/predict`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              applicant_name: formData.applicantName,
+              age,
+              credit_score: cibilScore,
+              annual_income: annualRevenue,
+              monthly_income: monthlyRevenue,
+              loan_amount: loanAmountRequested,
+              loan_term: loanTenureMonths,
+              existing_debt: existingLoans,
+              business_age_months: businessAgeMonths,
+              employment_status: "Self-employed",
+              loan_purpose: "Business",
+              savings_level: cibilScore >= 750 ? "above_1000" : cibilScore >= 650 ? "500_to_1000" : cibilScore >= 550 ? "100_to_500" : "below_100",
+            }),
+            signal: AbortSignal.timeout(8000),
+          });
+
+          if (apiRes.ok) {
+            const apiData = await apiRes.json();
+            usedApi = true;
+
+            // Map API response to the shape the app expects
+            data = {
+              decision: {
+                approved: apiData.approved,
+                reasons: [],
+                riskCategory: apiData.risk_level,
+                riskScore: apiData.risk_score,
+                approvalProbability: apiData.approval_probability,
+                model: `${apiData.model_name} — ${apiData.dataset}`,
+              },
+              metrics: {
+                loanToRevenueRatio: (loanAmountRequested / monthlyRevenue).toFixed(2),
+                emi: apiData.emi,
+                emiToIncomeRatio: ((apiData.emi / monthlyRevenue) * 100).toFixed(2),
+                interestRate: apiData.interest_rate,
+                recommendedLoanAmount: apiData.recommended_loan,
+                totalRepayment: apiData.emi * loanTenureMonths,
+              },
+              insights: {
+                cibilStrength: Math.round(((cibilScore - 300) / 600) * 100),
+                revenueStrength: Math.min(100, Math.round((annualRevenue / loanAmountRequested) * 10)),
+                loanCapacity: Math.min(100, Math.round((apiData.recommended_loan / loanAmountRequested) * 100)),
+                riskScore: apiData.approval_probability,
+              },
+              applicant: {
+                name: formData.applicantName,
+                age,
+                businessType: formData.businessType,
+                monthlyRevenue,
+                annualRevenue,
+                cibilScore,
+                loanAmountRequested,
+                loanTenureMonths,
+                businessAgeMonths,
+              },
+            };
+          }
+        } catch (apiErr) {
+          console.warn("FastAPI call failed, falling back to local model:", apiErr);
+        }
+      }
+
+      // ── Fallback: local JS logistic regression ─────────────────
+      if (!data) {
+        data = assessLoanApplication({
+          applicantName: formData.applicantName,
+          age, businessType: formData.businessType,
+          monthlyRevenue, annualRevenue, existingLoans,
+          loanAmountRequested, cibilScore, loanTenureMonths, businessAgeMonths,
+        });
+      }
+
+      // Store for insights page
       localStorage.setItem("lastAssessment", JSON.stringify(data));
 
-      // Save to Firestore in the background (non-blocking)
-      // so Firestore errors don't block the user from seeing results
+      // ── Save to Firestore (non-blocking) ───────────────────────
       addDoc(collection(db, "loan_applications"), {
         business_name: formData.applicantName,
         applicant_name: formData.applicantName,
-        age: parseInt(formData.age),
+        age,
         business_type: formData.businessType,
         cibil_score: cibilScore,
         monthly_revenue: monthlyRevenue,
-        annual_revenue: parseFloat(formData.annualRevenue),
+        annual_revenue: annualRevenue,
         existing_loans: existingLoans,
         loan_amount_requested: loanAmountRequested,
         loan_tenure_months: loanTenureMonths,
         business_age_months: businessAgeMonths,
         assessment_result: data,
+        prediction_source: usedApi ? "fastapi_ml" : "local_ml",
         created_at: serverTimestamp(),
+      }).then(() => {
+        console.log("[Firestore] Application saved successfully.");
       }).catch((err) => {
-        console.warn("Firestore save failed (non-critical):", err);
+        console.warn("[Firestore] Save failed (non-critical):", err);
       });
 
       toast({
         title: "Assessment Complete",
-        description: "Redirecting to results...",
+        description: usedApi
+          ? "Prediction via ML API. Redirecting to results..."
+          : "Prediction via local model. Redirecting to results...",
       });
 
       navigate("/assessment-results", {
-        state: {
-          assessmentResult: data,
-          formData,
-        },
+        state: { assessmentResult: data, formData },
       });
+
     } catch (error) {
       console.error("Assessment error:", error);
       toast({
@@ -163,12 +238,32 @@ export const LoanAssessmentForm = () => {
       <Card className="border-border/50 bg-card/80 backdrop-blur-sm shadow-lg animate-scale-in overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-accent/5 via-transparent to-secondary/5 pointer-events-none" />
         <CardHeader className="relative">
-          <CardTitle className="text-2xl flex items-center gap-2">
-            <Briefcase className="w-6 h-6 text-accent" />
-            Loan Application Form
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-2xl flex items-center gap-2">
+              <Briefcase className="w-6 h-6 text-accent" />
+              Loan Application Form
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Server className="w-4 h-4 text-muted-foreground" />
+              {apiStatus === "checking" && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Connecting...
+                </Badge>
+              )}
+              {apiStatus === "online" && (
+                <Badge className="text-xs gap-1 bg-green-500/20 text-green-600 border-green-500/30 hover:bg-green-500/20">
+                  <Wifi className="w-3 h-3" /> UCI Model Online
+                </Badge>
+              )}
+              {apiStatus === "offline" && (
+                <Badge variant="outline" className="text-xs gap-1 text-amber-600 border-amber-500/30">
+                  <WifiOff className="w-3 h-3" /> Local Model
+                </Badge>
+              )}
+            </div>
+          </div>
           <CardDescription>
-            Enter your details to check loan eligibility instantly
+            Powered by Random Forest trained on the UCI German Credit Dataset (1,000 real bank applicants)
           </CardDescription>
         </CardHeader>
         <CardContent className="relative">

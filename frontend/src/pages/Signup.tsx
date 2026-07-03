@@ -20,6 +20,16 @@ const Signup = () => {
     e.preventDefault();
     setLoading(true);
 
+    if (email.trim().toLowerCase() !== "tera.ashwithaareddy@gmail.com") {
+      toast({
+        title: "Registration Denied",
+        description: "Registration is restricted to authorized administrators only.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       toast({

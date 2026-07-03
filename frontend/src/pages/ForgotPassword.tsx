@@ -19,10 +19,18 @@ const ForgotPassword = () => {
     e.preventDefault();
     setLoading(true);
     
-    try {
-      await sendPasswordResetEmail(auth, email, {
-        url: `${window.location.origin}/login`,
+    if (email.trim().toLowerCase() !== "tera.ashwithaareddy@gmail.com") {
+      toast({ 
+        title: "Action Denied", 
+        description: "Password resets are restricted to authorized administrators.", 
+        variant: "destructive" 
       });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
       toast({ title: "Check your email", description: "We've sent you a password reset link." });
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });

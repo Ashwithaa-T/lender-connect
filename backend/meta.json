@@ -1,0 +1,100 @@
+{
+  "numeric_features": [
+    "duration_months",
+    "credit_amount",
+    "credit_amount_log",
+    "amount_per_month",
+    "installment_rate_pct",
+    "present_residence_since",
+    "age",
+    "existing_credits",
+    "dependents",
+    "high_risk_purpose",
+    "good_savings",
+    "stable_employment",
+    "good_checking"
+  ],
+  "categorical_features": [
+    "checking_account_status",
+    "credit_history",
+    "savings_account",
+    "employment_since",
+    "loan_purpose_mapped"
+  ],
+  "categorical_categories": {
+    "checking_account_status": [
+      "no_checking",
+      "below_0",
+      "0_to_200",
+      "above_200"
+    ],
+    "credit_history": [
+      "no_credits_taken",
+      "all_credits_paid",
+      "existing_credits_paid",
+      "delay_in_past",
+      "critical_account"
+    ],
+    "savings_account": [
+      "below_100",
+      "100_to_500",
+      "500_to_1000",
+      "above_1000",
+      "unknown_none"
+    ],
+    "employment_since": [
+      "unemployed",
+      "below_1yr",
+      "1_to_4yr",
+      "4_to_7yr",
+      "above_7yr"
+    ],
+    "loan_purpose_mapped": [
+      "car_new",
+      "car_used",
+      "furniture",
+      "radio_tv",
+      "domestic_appliance",
+      "repairs",
+      "education",
+      "vacation",
+      "retraining",
+      "business",
+      "others"
+    ]
+  },
+  "thresholds": {
+    "approve": 0.5,
+    "risk_low": 0.72,
+    "risk_medium": 0.5
+  },
+  "medians": {
+    "duration_months": 18.0,
+    "credit_amount": 2319.5,
+    "credit_amount_log": 7.749537935467396,
+    "amount_per_month": 130.33333333333331,
+    "installment_rate_pct": 3.0,
+    "present_residence_since": 3.0,
+    "age": 33.0,
+    "existing_credits": 1.0,
+    "dependents": 1.0,
+    "high_risk_purpose": 0.0,
+    "good_savings": 0.0,
+    "stable_employment": 0.0,
+    "good_checking": 0.0
+  },
+  "modes": {
+    "checking_account_status": "above_200",
+    "credit_history": "existing_credits_paid",
+    "savings_account": "below_100",
+    "employment_since": "1_to_4yr",
+    "loan_purpose_mapped": "radio_tv"
+  },
+  "dataset_info": {
+    "source": "UCI Statlog German Credit Dataset",
+    "url": "https://archive.ics.uci.edu/dataset/144/statlog+german+credit+data",
+    "records": 1000,
+    "features": 20,
+    "model": "Random Forest"
+  }
+}
