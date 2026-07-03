@@ -12,7 +12,7 @@ import { assessLoanApplication } from "@/lib/assess-loan";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, User, Building2, IndianRupee, CreditCard, Calendar, Briefcase, Server, Wifi, WifiOff } from "lucide-react";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://lender-connect.onrender.com";
 
 const businessTypes = [
   "Retail",
