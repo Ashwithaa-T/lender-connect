@@ -179,26 +179,28 @@ export const LoanAssessmentForm = () => {
       localStorage.setItem("lastAssessment", JSON.stringify(data));
 
       // ── Save to Firestore (non-blocking) ───────────────────────
-      addDoc(collection(db, "loan_applications"), {
-        business_name: formData.applicantName,
-        applicant_name: formData.applicantName,
-        age,
-        business_type: formData.businessType,
-        cibil_score: cibilScore,
-        monthly_revenue: monthlyRevenue,
-        annual_revenue: annualRevenue,
-        existing_loans: existingLoans,
-        loan_amount_requested: loanAmountRequested,
-        loan_tenure_months: loanTenureMonths,
-        business_age_months: businessAgeMonths,
-        assessment_result: data,
-        prediction_source: usedApi ? "fastapi_ml" : "local_ml",
-        created_at: serverTimestamp(),
-      }).then(() => {
-        console.log("[Firestore] Application saved successfully.");
-      }).catch((err) => {
-        console.warn("[Firestore] Save failed (non-critical):", err);
-      });
+      if (db) {
+        addDoc(collection(db, "loan_applications"), {
+          business_name: formData.applicantName,
+          applicant_name: formData.applicantName,
+          age,
+          business_type: formData.businessType,
+          cibil_score: cibilScore,
+          monthly_revenue: monthlyRevenue,
+          annual_revenue: annualRevenue,
+          existing_loans: existingLoans,
+          loan_amount_requested: loanAmountRequested,
+          loan_tenure_months: loanTenureMonths,
+          business_age_months: businessAgeMonths,
+          assessment_result: data,
+          prediction_source: usedApi ? "fastapi_ml" : "local_ml",
+          created_at: serverTimestamp(),
+        }).then(() => {
+          console.log("[Firestore] Application saved successfully.");
+        }).catch((err) => {
+          console.warn("[Firestore] Save failed (non-critical):", err);
+        });
+      }
 
       toast({
         title: "Assessment Complete",
