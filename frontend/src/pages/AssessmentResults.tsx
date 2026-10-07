@@ -203,7 +203,11 @@ const AssessmentResults = () => {
             </CardHeader>
             <CardContent>
               <ul className="space-y-3">
-                {decision.reasons.map((reason, index) => (
+                {(decision.reasons.length > 0 ? decision.reasons : [
+                  decision.approved
+                    ? "Applicant profile meets lending criteria based on ML model analysis."
+                    : "Applicant profile does not meet lending criteria based on ML model analysis."
+                ]).map((reason, index) => (
                   <li key={index} className="flex items-start gap-3 animate-fade-in" style={{ animationDelay: `${0.6 + index * 0.1}s` }}>
                     <span className={`w-2 h-2 rounded-full mt-2 ${
                       decision.approved ? "bg-secondary" : "bg-destructive"

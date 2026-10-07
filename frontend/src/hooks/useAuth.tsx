@@ -2,9 +2,13 @@ import { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { User, onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
 
+interface AuthSession {
+  user: User;
+}
+
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<any | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import json
 import pickle
-import os
+from pathlib import Path
 import urllib.request
 import io
 import numpy as np
@@ -11,6 +11,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score, confusion_matrix
+from imblearn.over_sampling import SMOTE
 
 # Load real German credit dataset from UCI Machine Learning Repository
 DATA_URL = "https://archive.ics.uci.edu/ml/machine-learning-databases/statlog/german/german.data"
@@ -94,14 +95,21 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y
 )
 
-# Train models
+# Apply SMOTE only on training data to balance the minority class (Rejected)
+# Test set is kept untouched to reflect real-world distribution
+print(f"Before SMOTE — Approved: {y_train.sum()}, Rejected: {(y_train==0).sum()}")
+smote = SMOTE(random_state=42)
+X_train, y_train = smote.fit_resample(X_train, y_train)
+print(f"After  SMOTE — Approved: {y_train.sum()}, Rejected: {(y_train==0).sum()}")
+
+# Train models — no need for class_weight since SMOTE balanced the training set
 models = {
     "Logistic Regression": Pipeline([
         ("scaler", StandardScaler()),
-        ("clf", LogisticRegression(max_iter=1000, C=1.0, class_weight="balanced", random_state=42)),
+        ("clf", LogisticRegression(max_iter=1000, C=1.0, random_state=42)),
     ]),
     "Random Forest": Pipeline([
-        ("clf", RandomForestClassifier(n_estimators=200, max_depth=8, min_samples_leaf=5, class_weight="balanced", random_state=42)),
+        ("clf", RandomForestClassifier(n_estimators=200, max_depth=8, min_samples_leaf=5, random_state=42)),
     ]),
     "Gradient Boosting": Pipeline([
         ("scaler", StandardScaler()),
@@ -119,18 +127,26 @@ for name, pipeline in models.items():
     y_proba = pipeline.predict_proba(X_test)[:, 1]
     acc = accuracy_score(y_test, y_pred)
     auc = roc_auc_score(y_test, y_proba)
+    cm = confusion_matrix(y_test, y_pred)
+    
+    print(f"\n--- {name} ---")
+    print(f"Accuracy:  {acc:.4f}")
+    print(f"ROC-AUC:   {auc:.4f}")
+    print(f"Confusion Matrix (TN, FP / FN, TP):\n{cm}")
+    print("Classification Report:")
+    print(classification_report(y_test, y_pred, target_names=["Rejected (0)", "Approved (1)"]))
     
     if auc > best_auc:
         best_auc = auc
         best_model = pipeline
         best_name = name
 
-print(f"Best model: {best_name} (ROC-AUC = {best_auc:.4f})")
+print(f"\n>> Selected Best Model: {best_name} (ROC-AUC = {best_auc:.4f})")
 
-# Save model and meta JSON
-os.makedirs("backend", exist_ok=True)
+# Save model and meta JSON — always write next to this script, not relative to CWD
+OUT_DIR = Path(__file__).parent
 
-with open("backend/model.pkl", "wb") as f:
+with open(OUT_DIR / "model.pkl", "wb") as f:
     pickle.dump(best_model, f)
 
 medians = {col: float(df[col].median()) for col in NUMERIC_FEATURES}
@@ -152,7 +168,7 @@ meta = {
     }
 }
 
-with open("backend/meta.json", "w") as f:
+with open(OUT_DIR / "meta.json", "w") as f:
     json.dump(meta, f, indent=2)
 
 print("Saved model and meta configuration successfully")

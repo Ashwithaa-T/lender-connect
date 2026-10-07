@@ -38,3 +38,6 @@ __pycache__/
 venv/
 .venv/
 env/
+
+# ML model binary — regenerate with: cd backend && python train.py
+*.pkl
