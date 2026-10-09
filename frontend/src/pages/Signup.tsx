@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, CreditCard, UserPlus } from "lucide-react";
+import { ArrowLeft, CreditCard, UserPlus, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Signup = () => {
@@ -21,20 +21,22 @@ const Signup = () => {
     setLoading(true);
 
     if (email.trim().toLowerCase() !== "tera.ashwithaareddy@gmail.com") {
+      sessionStorage.setItem("isDemoAdmin", "true");
       toast({
-        title: "Registration Denied",
-        description: "Registration is restricted to authorized administrators only.",
-        variant: "destructive",
+        title: "Admin Registration Restricted",
+        description: "Live administrator rights are reserved. Welcoming you to the Evaluator Preview Mode!",
       });
+      navigate("/admin?demo=true");
       setLoading(false);
       return;
     }
 
     try {
       await createUserWithEmailAndPassword(auth, email, password);
+      sessionStorage.removeItem("isDemoAdmin");
       toast({
         title: "Account created",
-        description: "You have successfully signed up.",
+        description: "You have successfully signed up as Primary Administrator.",
       });
       navigate("/admin");
     } catch (error: any) {
@@ -42,6 +44,15 @@ const Signup = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGuestDemo = () => {
+    sessionStorage.setItem("isDemoAdmin", "true");
+    toast({
+      title: "Entering Demo Mode",
+      description: "Welcome! Exploring sample underwriting portfolio as Evaluator.",
+    });
+    navigate("/admin?demo=true");
   };
 
   return (
@@ -93,6 +104,26 @@ const Signup = () => {
                 {loading ? "Creating account..." : "Sign Up"}
               </Button>
             </form>
+
+            <div className="relative my-5">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground font-medium">Or for evaluators</span>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGuestDemo}
+              className="w-full border-primary/40 hover:bg-primary/10 text-foreground transition-all duration-200"
+            >
+              <Eye className="w-4 h-4 mr-2 text-primary" />
+              Explore Admin as Guest / Evaluator
+            </Button>
+
             <p className="text-center text-sm text-muted-foreground mt-4">
               Already have an account?{" "}
               <Link to="/login" className="text-primary hover:underline">Sign in</Link>

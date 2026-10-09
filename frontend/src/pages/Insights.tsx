@@ -113,18 +113,24 @@ const Insights = () => {
 
   // Gauge chart component
   const GaugeChart = ({ value, label }: { value: number; label: string }) => {
-    const rotation = (value / 100) * 180 - 90;
-    const color = value >= 70 ? "hsl(var(--secondary))" : value >= 40 ? "hsl(45, 100%, 50%)" : "hsl(var(--destructive))";
+    const safeValue = Math.min(Math.max(value || 0, 0), 100);
+    const color = safeValue >= 70 ? "hsl(var(--secondary))" : safeValue >= 40 ? "hsl(45, 100%, 50%)" : "hsl(var(--destructive))";
+    
+    // Calculate bead indicator coordinate along the perimeter of the arc
+    // Angle in radians: from PI (value 0, left) to 0 (value 100, right)
+    const angleRad = Math.PI * (1 - safeValue / 100);
+    const beadX = 100 + 80 * Math.cos(angleRad);
+    const beadY = 100 - 80 * Math.sin(angleRad);
     
     return (
-      <div className="relative w-full h-32">
-        <svg viewBox="0 0 200 120" className="w-full h-full">
+      <div className="relative w-full h-36 flex flex-col items-center">
+        <svg viewBox="0 0 200 125" className="w-full max-w-[240px]">
           {/* Background arc */}
           <path
             d="M 20 100 A 80 80 0 0 1 180 100"
             fill="none"
             stroke="hsl(var(--muted))"
-            strokeWidth="12"
+            strokeWidth="14"
             strokeLinecap="round"
           />
           {/* Value arc */}
@@ -132,27 +138,40 @@ const Insights = () => {
             d="M 20 100 A 80 80 0 0 1 180 100"
             fill="none"
             stroke={color}
-            strokeWidth="12"
+            strokeWidth="14"
             strokeLinecap="round"
-            strokeDasharray={`${(value / 100) * 251.2} 251.2`}
+            strokeDasharray={`${(safeValue / 100) * 251.2} 251.2`}
           />
-          {/* Needle */}
-          <line
-            x1="100"
-            y1="100"
-            x2="100"
-            y2="40"
-            stroke="hsl(var(--foreground))"
+          {/* Indicator Bead on the arc perimeter */}
+          <circle
+            cx={beadX}
+            cy={beadY}
+            r="8"
+            fill={color}
+            stroke="hsl(var(--background))"
             strokeWidth="3"
-            strokeLinecap="round"
-            transform={`rotate(${rotation}, 100, 100)`}
+            className="filter drop-shadow"
           />
-          <circle cx="100" cy="100" r="6" fill="hsl(var(--foreground))" />
-          <text x="100" y="95" textAnchor="middle" className="text-2xl font-bold" fill="currentColor">
-            {value}%
+          {/* Centered Large Percentage Value — unobstructed */}
+          <text
+            x="100"
+            y="76"
+            textAnchor="middle"
+            className="text-3xl font-extrabold fill-foreground tracking-tight"
+          >
+            {safeValue}%
+          </text>
+          {/* Status tier label inside the arch */}
+          <text
+            x="100"
+            y="96"
+            textAnchor="middle"
+            className="text-[11px] font-semibold fill-muted-foreground uppercase tracking-wider"
+          >
+            {safeValue >= 70 ? "High Likelihood" : safeValue >= 40 ? "Moderate" : "Low Likelihood"}
           </text>
         </svg>
-        <p className="text-center text-sm text-muted-foreground mt-1">{label}</p>
+        <p className="text-center text-sm font-medium text-muted-foreground -mt-1">{label}</p>
       </div>
     );
   };

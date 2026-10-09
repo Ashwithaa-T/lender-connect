@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, CreditCard, LogIn } from "lucide-react";
+import { ArrowLeft, CreditCard, LogIn, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Login = () => {
@@ -22,6 +22,7 @@ const Login = () => {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      sessionStorage.removeItem("isDemoAdmin");
       toast({ title: "Welcome back!" });
       navigate("/admin");
     } catch (error: any) {
@@ -29,6 +30,15 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGuestDemo = () => {
+    sessionStorage.setItem("isDemoAdmin", "true");
+    toast({
+      title: "Entering Demo Mode",
+      description: "Welcome! Exploring sample underwriting portfolio as Evaluator.",
+    });
+    navigate("/admin?demo=true");
   };
 
   return (
@@ -45,7 +55,7 @@ const Login = () => {
             </div>
             <CardTitle className="text-2xl text-foreground">Sign In</CardTitle>
             <CardDescription className="text-muted-foreground">
-              Access the Review Applications dashboard
+              Access the Institutional Underwriting dashboard
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -79,6 +89,26 @@ const Login = () => {
                 {loading ? "Signing in..." : "Sign In"}
               </Button>
             </form>
+
+            <div className="relative my-5">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground font-medium">Or for evaluators</span>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGuestDemo}
+              className="w-full border-primary/40 hover:bg-primary/10 text-foreground transition-all duration-200"
+            >
+              <Eye className="w-4 h-4 mr-2 text-primary" />
+              Explore Admin as Guest / Evaluator
+            </Button>
+
             <p className="text-center text-sm text-muted-foreground mt-4">
               <Link to="/forgot-password" className="text-primary hover:underline">
                 Forgot password?

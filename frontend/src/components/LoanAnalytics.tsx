@@ -5,24 +5,34 @@ import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { TrendingUp, Users, DollarSign, Activity } from "lucide-react";
 
-interface LoanApplication {
+export interface LoanApplication {
   cibil_score: number;
   loan_amount_requested: number;
   monthly_revenue: number;
   existing_loans: number;
   created_at: any;
+  assessment_result?: any;
 }
 
-export const LoanAnalytics = () => {
+export const LoanAnalytics = ({ customApplications }: { customApplications?: LoanApplication[] } = {}) => {
   const [applications, setApplications] = useState<LoanApplication[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchApplications();
-  }, []);
+    if (customApplications && customApplications.length > 0) {
+      setApplications(customApplications);
+      setLoading(false);
+    } else {
+      fetchApplications();
+    }
+  }, [customApplications]);
 
   const fetchApplications = async () => {
     try {
+      if (!db) {
+        setLoading(false);
+        return;
+      }
       const q = query(collection(db, "loan_applications"), orderBy("created_at", "desc"));
       const querySnapshot = await getDocs(q);
       const data = querySnapshot.docs.map(doc => doc.data() as LoanApplication);
@@ -38,15 +48,41 @@ export const LoanAnalytics = () => {
     const stats = { approved: 0, review: 0, rejected: 0 };
     
     applications.forEach((app) => {
-      const debtRatio = (app.existing_loans / app.monthly_revenue) * 100;
-      const loanRatio = app.loan_amount_requested / app.monthly_revenue;
+      const res = app.assessment_result;
       
-      if (app.cibil_score >= 750 && debtRatio < 40 && loanRatio < 2) {
-        stats.approved++;
-      } else if (app.cibil_score >= 650 && debtRatio < 50 && loanRatio < 3) {
-        stats.review++;
+      if (res) {
+        const approved = res?.decision?.approved ?? res?.approved;
+        const rawCategory =
+          res?.decision?.riskCategory ||
+          res?.decision?.risk_category ||
+          res?.decision?.risk_level ||
+          res?.riskCategory ||
+          res?.risk_category ||
+          res?.risk_level;
+
+        const category = rawCategory ? String(rawCategory).toLowerCase() : "";
+
+        if (approved === false || category.includes("high")) {
+          stats.rejected++;
+        } else if (category.includes("medium") || category.includes("moderate") || category.includes("review")) {
+          stats.review++;
+        } else if (approved === true || category.includes("low")) {
+          stats.approved++;
+        } else {
+          stats.review++;
+        }
       } else {
-        stats.rejected++;
+        // Fallback heuristic if no assessment_result is present
+        const debtRatio = (app.existing_loans / (app.monthly_revenue || 1)) * 100;
+        const loanRatio = app.loan_amount_requested / (app.monthly_revenue || 1);
+        
+        if (app.cibil_score >= 750 && debtRatio < 40 && loanRatio < 2) {
+          stats.approved++;
+        } else if (app.cibil_score >= 650 && debtRatio < 50 && loanRatio < 3) {
+          stats.review++;
+        } else {
+          stats.rejected++;
+        }
       }
     });
 

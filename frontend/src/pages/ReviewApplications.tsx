@@ -46,15 +46,31 @@ const ReviewApplications = () => {
   }, []);
 
   const getRiskBadge = (result: any) => {
-    if (!result?.risk_category) return <Badge variant="outline">Pending</Badge>;
+    const rawCategory =
+      result?.decision?.riskCategory ||
+      result?.decision?.risk_category ||
+      result?.decision?.risk_level ||
+      result?.riskCategory ||
+      result?.risk_category ||
+      result?.risk_level ||
+      (result?.decision?.approved === true ? "Low Risk" : result?.decision?.approved === false ? "High Risk" : null);
+
+    if (!rawCategory) return <Badge variant="outline">Pending</Badge>;
+
+    let category = String(rawCategory).trim();
+    if (category.toLowerCase() === "low" || category.toLowerCase() === "low risk") category = "Low Risk";
+    else if (category.toLowerCase() === "medium" || category.toLowerCase() === "moderate" || category.toLowerCase() === "moderate risk") category = "Moderate Risk";
+    else if (category.toLowerCase() === "high" || category.toLowerCase() === "high risk") category = "High Risk";
+
     const colors: Record<string, string> = {
       "Low Risk": "bg-green-500/20 text-green-400 border-green-500/30",
       "Moderate Risk": "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
       "High Risk": "bg-red-500/20 text-red-400 border-red-500/30",
     };
+
     return (
-      <Badge className={colors[result.risk_category] || ""} variant="outline">
-        {result.risk_category}
+      <Badge className={colors[category] || "bg-primary/20 text-primary border-primary/30"} variant="outline">
+        {category}
       </Badge>
     );
   };

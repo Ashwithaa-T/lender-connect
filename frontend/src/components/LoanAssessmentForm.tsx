@@ -178,27 +178,47 @@ export const LoanAssessmentForm = () => {
       // Store for insights page
       localStorage.setItem("lastAssessment", JSON.stringify(data));
 
-      // ── Save to Firestore (non-blocking) ───────────────────────
+      // ── Persistent Storage: LocalStorage + Cloud Firestore ─────────
+      const newAppRecord = {
+        id: `app_${Date.now()}`,
+        business_name: formData.applicantName,
+        applicant_name: formData.applicantName,
+        age,
+        business_type: formData.businessType,
+        cibil_score: cibilScore,
+        monthly_revenue: monthlyRevenue,
+        annual_revenue: annualRevenue,
+        existing_loans: existingLoans,
+        loan_amount_requested: loanAmountRequested,
+        loan_tenure_months: loanTenureMonths,
+        business_age_months: businessAgeMonths,
+        assessment_result: {
+          ...data,
+          risk_category: data.decision?.riskCategory || "Moderate Risk",
+        },
+        prediction_source: usedApi ? "fastapi_ml" : "local_ml",
+        created_at: new Date().toISOString(),
+      };
+
+      // 1. Always save in browser's local storage (persists through server restarts & page reloads)
+      try {
+        const storedRaw = localStorage.getItem("stored_loan_applications");
+        const storedList = storedRaw ? JSON.parse(storedRaw) : [];
+        storedList.unshift(newAppRecord);
+        localStorage.setItem("stored_loan_applications", JSON.stringify(storedList));
+      } catch (storageErr) {
+        console.warn("[Storage] Local persistence error:", storageErr);
+      }
+
+      // 2. Also save to cloud Firestore
       if (db) {
         addDoc(collection(db, "loan_applications"), {
-          business_name: formData.applicantName,
-          applicant_name: formData.applicantName,
-          age,
-          business_type: formData.businessType,
-          cibil_score: cibilScore,
-          monthly_revenue: monthlyRevenue,
-          annual_revenue: annualRevenue,
-          existing_loans: existingLoans,
-          loan_amount_requested: loanAmountRequested,
-          loan_tenure_months: loanTenureMonths,
-          business_age_months: businessAgeMonths,
-          assessment_result: data,
-          prediction_source: usedApi ? "fastapi_ml" : "local_ml",
+          ...newAppRecord,
           created_at: serverTimestamp(),
-        }).then(() => {
-          console.log("[Firestore] Application saved successfully.");
+        }).then((docRef) => {
+          console.log("[Firestore] Application successfully stored in cloud with ID:", docRef.id);
         }).catch((err) => {
-          console.warn("[Firestore] Save failed (non-critical):", err);
+          console.warn("[Firestore] Cloud save notice (saved locally in browser):", err);
         });
       }
 

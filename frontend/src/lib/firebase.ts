@@ -32,7 +32,11 @@ if (isConfigured) {
 
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
-  db = getFirestore(app, "lender-connect");
+  try {
+    db = getFirestore(app);
+  } catch (err) {
+    console.warn("[Firebase] Firestore initialization error:", err);
+  }
 } else {
   console.warn(
     "[Firebase] Missing or invalid environment variables. " +
