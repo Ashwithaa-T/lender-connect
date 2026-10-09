@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import Navigation from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
@@ -24,105 +24,65 @@ interface LoanApplication {
   created_at: any;
 }
 
-const DEMO_APPLICATIONS: LoanApplication[] = [
+const SAMPLE_DEMO_APPLICATIONS: LoanApplication[] = [
   {
-    id: "demo-1",
-    applicant_name: "Aarav Sharma",
-    business_name: "Apex Logistics & Supply",
+    id: "demo-sample-1",
+    applicant_name: "Demo Applicant A (Sample)",
+    business_name: "Urban Logistics Ltd",
     business_type: "Logistics",
-    cibil_score: 785,
-    monthly_revenue: 450000,
-    loan_amount_requested: 1200000,
-    created_at: new Date(Date.now() - 2 * 3600000),
+    cibil_score: 775,
+    monthly_revenue: 350000,
+    loan_amount_requested: 1000000,
+    created_at: new Date(Date.now() - 3600000),
     assessment_result: {
       decision: {
         approved: true,
         riskCategory: "Low Risk",
-        approvalProbability: 84,
+        approvalProbability: 82,
         model: "Random Forest — UCI German Credit",
       },
-      metrics: { interestRate: 12.0, emi: 56420 },
+      metrics: { interestRate: 12.0, emi: 47000 },
       risk_category: "Low Risk",
     },
   },
   {
-    id: "demo-2",
-    applicant_name: "Priya Sundaram",
-    business_name: "Vedic Crafts Emporium",
+    id: "demo-sample-2",
+    applicant_name: "Demo Applicant B (Sample)",
+    business_name: "Heritage Crafts Emporium",
     business_type: "Retail",
-    cibil_score: 680,
-    monthly_revenue: 220000,
-    loan_amount_requested: 800000,
-    created_at: new Date(Date.now() - 5 * 3600000),
+    cibil_score: 660,
+    monthly_revenue: 180000,
+    loan_amount_requested: 600000,
+    created_at: new Date(Date.now() - 7200000),
     assessment_result: {
       decision: {
         approved: true,
         riskCategory: "Moderate Risk",
-        approvalProbability: 66,
+        approvalProbability: 64,
         model: "Random Forest — UCI German Credit",
       },
-      metrics: { interestRate: 14.0, emi: 38400 },
+      metrics: { interestRate: 14.5, emi: 29500 },
       risk_category: "Moderate Risk",
     },
   },
   {
-    id: "demo-3",
-    applicant_name: "Rohan Varma",
-    business_name: "Varma Precision Auto Parts",
-    business_type: "Manufacturing",
-    cibil_score: 740,
-    monthly_revenue: 650000,
-    loan_amount_requested: 2500000,
-    created_at: new Date(Date.now() - 24 * 3600000),
-    assessment_result: {
-      decision: {
-        approved: true,
-        riskCategory: "Low Risk",
-        approvalProbability: 79,
-        model: "Random Forest — UCI German Credit",
-      },
-      metrics: { interestRate: 12.0, emi: 117500 },
-      risk_category: "Low Risk",
-    },
-  },
-  {
-    id: "demo-4",
-    applicant_name: "Meera Patel",
-    business_name: "FreshRoots Organic Cafe",
-    business_type: "Hospitality",
-    cibil_score: 590,
-    monthly_revenue: 90000,
-    loan_amount_requested: 600000,
-    created_at: new Date(Date.now() - 36 * 3600000),
+    id: "demo-sample-3",
+    applicant_name: "Demo Applicant C (Sample)",
+    business_name: "Apex Tech Services",
+    business_type: "Technology",
+    cibil_score: 580,
+    monthly_revenue: 95000,
+    loan_amount_requested: 500000,
+    created_at: new Date(Date.now() - 14400000),
     assessment_result: {
       decision: {
         approved: false,
         riskCategory: "High Risk",
-        approvalProbability: 38,
+        approvalProbability: 36,
         model: "Random Forest — UCI German Credit",
       },
-      metrics: { interestRate: 18.0, emi: 32700 },
+      metrics: { interestRate: 18.0, emi: 27200 },
       risk_category: "High Risk",
-    },
-  },
-  {
-    id: "demo-5",
-    applicant_name: "Vikram Sen",
-    business_name: "Sen Cloud Solutions",
-    business_type: "Tech",
-    cibil_score: 810,
-    monthly_revenue: 850000,
-    loan_amount_requested: 3000000,
-    created_at: new Date(Date.now() - 48 * 3600000),
-    assessment_result: {
-      decision: {
-        approved: true,
-        riskCategory: "Low Risk",
-        approvalProbability: 89,
-        model: "Random Forest — UCI German Credit",
-      },
-      metrics: { interestRate: 12.0, emi: 141000 },
-      risk_category: "Low Risk",
     },
   },
 ];
@@ -137,12 +97,17 @@ const AdminDashboard = () => {
     }
   };
 
-  // Pre-populate with local data immediately so Analytics tab is instant
-  const initialApps = getStoredLocalApps();
-  const [applications, setApplications] = useState<LoanApplication[]>(initialApps.length > 0 ? initialApps : []);
-  const [loading, setLoading] = useState(initialApps.length === 0);
-  const [accessDenied, setAccessDenied] = useState(false);
-  const { user, signOut } = useAuth();
+  const mergeApplications = (cloudApps: LoanApplication[], localApps: LoanApplication[]): LoanApplication[] => {
+    const merged = [...cloudApps];
+    for (const loc of localApps) {
+      if (!merged.some(c => c.id === loc.id || (c.applicant_name === loc.applicant_name && c.loan_amount_requested === loc.loan_amount_requested))) {
+        merged.unshift(loc);
+      }
+    }
+    return merged;
+  };
+
+  const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
 
   const isDemoParam = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "true";
@@ -150,51 +115,127 @@ const AdminDashboard = () => {
   const isPrimaryAdmin = user?.email === "tera.ashwithaareddy@gmail.com";
   const isDemoMode = !isPrimaryAdmin || isDemoParam || isGuestDemo;
 
+  // Initialize: Primary admin gets real local applications; only explicit demo guests start with sample data
+  const [applications, setApplications] = useState<LoanApplication[]>(() => {
+    if (isDemoParam || isGuestDemo) return SAMPLE_DEMO_APPLICATIONS;
+    return getStoredLocalApps();
+  });
+  const [loading, setLoading] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
+
+  const sortApplications = (list: LoanApplication[]): LoanApplication[] => {
+    return [...list].sort((a, b) => {
+      const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at || 0).getTime();
+      const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at || 0).getTime();
+      return timeB - timeA;
+    });
+  };
+
   const fetchApplications = async () => {
     setLoading(true);
     setAccessDenied(false);
-    const localApps = getStoredLocalApps();
 
+    // In demo mode: only show sample data, protect real applicant data
     if (isDemoMode) {
-      // In demo mode: merge real applications submitted on this machine with the sample portfolio
-      const combined = [
-        ...localApps,
-        ...DEMO_APPLICATIONS.filter(
-          (demo) => !localApps.some((loc) => loc.applicant_name === demo.applicant_name)
-        ),
-      ];
-      setApplications(combined);
+      setApplications(SAMPLE_DEMO_APPLICATIONS);
       setLoading(false);
       return;
     }
-    
+
+    const localApps = getStoredLocalApps();
+
+    if (!db) {
+      setApplications(sortApplications(mergeApplications([], localApps)));
+      setLoading(false);
+      return;
+    }
+
     try {
-      if (!db) {
-        setApplications(localApps.length > 0 ? localApps : DEMO_APPLICATIONS);
-        setLoading(false);
-        return;
-      }
-      const q = query(collection(db, "loan_applications"), orderBy("created_at", "desc"), limit(25));
+      const q = query(collection(db, "loan_applications"), limit(50));
       const querySnapshot = await getDocs(q);
       const cloudData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as LoanApplication[];
-      
-      const allMerged = [...cloudData];
-      for (const loc of localApps) {
-        if (!allMerged.some(c => c.id === loc.id || (c.applicant_name === loc.applicant_name && c.loan_amount_requested === loc.loan_amount_requested))) {
-          allMerged.push(loc);
-        }
-      }
-      setApplications(allMerged.length > 0 ? allMerged : DEMO_APPLICATIONS);
+      setApplications(sortApplications(mergeApplications(cloudData, localApps)));
     } catch (error) {
       console.warn("Firestore query note, serving persistent local records:", error);
-      setApplications(localApps.length > 0 ? localApps : DEMO_APPLICATIONS);
+      setApplications(sortApplications(mergeApplications([], localApps)));
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchApplications();
-  }, [user, isDemoMode]);
+    // Wait until Firebase Auth has checked user session before determining mode
+    if (authLoading) return;
+
+    if (isDemoMode) {
+      setApplications(SAMPLE_DEMO_APPLICATIONS);
+      setLoading(false);
+      return;
+    }
+
+    // PRIMARY ADMIN ONLY: Real applications ONLY (never include sample records)
+    const local = getStoredLocalApps();
+    setApplications(sortApplications(mergeApplications([], local)));
+
+    let unsubscribeFirestore: (() => void) | null = null;
+    if (db) {
+      try {
+        const q = query(collection(db, "loan_applications"), limit(50));
+        unsubscribeFirestore = onSnapshot(
+          q,
+          (snapshot) => {
+            const cloudData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as LoanApplication[];
+            const freshLocal = getStoredLocalApps();
+            // Pure merge of cloud + local, completely free of any demo sample records
+            setApplications(sortApplications(mergeApplications(cloudData, freshLocal)));
+            setLoading(false);
+          },
+          (err) => {
+            console.warn("[Firestore] Real-time listener note:", err);
+            const freshLocal = getStoredLocalApps();
+            setApplications(sortApplications(mergeApplications([], freshLocal)));
+            setLoading(false);
+          }
+        );
+      } catch (err) {
+        console.warn("[Firestore] Listener setup note:", err);
+      }
+    }
+
+    const handleNewApplication = () => {
+      const freshLocal = getStoredLocalApps();
+      setApplications(prev => {
+        // Strip any sample records and strictly merge real applications
+        const cleanPrev = prev.filter(a => !a.id.startsWith("demo-sample-"));
+        return sortApplications(mergeApplications(cleanPrev, freshLocal));
+      });
+    };
+
+    window.addEventListener("loan_application_submitted", handleNewApplication);
+    window.addEventListener("storage", handleNewApplication);
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      try {
+        channel = new BroadcastChannel("lender_connect_apps");
+        channel.onmessage = (msg) => {
+          if (msg.data?.type === "APPLICATION_SUBMITTED") {
+            handleNewApplication();
+          }
+        };
+      } catch (e) {
+        // ignore BroadcastChannel errors
+      }
+    }
+
+    return () => {
+      if (unsubscribeFirestore) unsubscribeFirestore();
+      window.removeEventListener("loan_application_submitted", handleNewApplication);
+      window.removeEventListener("storage", handleNewApplication);
+      if (channel) {
+        channel.close();
+      }
+    };
+  }, [user, isDemoMode, authLoading]);
 
   const getRiskBadge = (result: any) => {
     const rawCategory =
@@ -265,7 +306,7 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       <div className="container mx-auto px-4 pt-24 pb-12">
-        {/* Evaluator Demo Mode Alert Banner */}
+        {/* Evaluator Preview Mode Alert Banner */}
         {isDemoMode && (
           <div className="mb-6 p-4 rounded-xl border border-primary/30 bg-primary/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
             <div className="flex items-center gap-3">
@@ -276,11 +317,11 @@ const AdminDashboard = () => {
                 <p className="text-sm font-semibold text-foreground flex items-center gap-2">
                   Evaluator Preview Mode
                   <Badge variant="secondary" className="text-xs bg-primary/20 text-primary border-primary/30">
-                    Portfolio Demo
+                    Sample Data
                   </Badge>
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Displaying interactive applicant portfolio for testing and evaluation. Live database write controls are restricted to the primary administrator.
+                  Displaying anonymized sample portfolio for evaluation. Real applicant data is private to the primary administrator.
                 </p>
               </div>
             </div>
@@ -320,14 +361,14 @@ const AdminDashboard = () => {
               <RefreshCw className="w-4 h-4 mr-2" /> Refresh
             </Button>
             <Button variant="ghost" size="sm" onClick={handleSignOut}>
-              <LogOut className="w-4 h-4 mr-2" /> {isDemoMode ? "Exit Demo" : "Sign Out"}
+              <LogOut className="w-4 h-4 mr-2" /> {isDemoMode ? "Exit Preview" : "Sign Out"}
             </Button>
           </div>
         </div>
 
         <Tabs defaultValue="applications" className="space-y-6">
           <TabsList className="bg-muted/50">
-            <TabsTrigger value="applications">Applications</TabsTrigger>
+            <TabsTrigger value="applications">Applicants</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabsList>
 
@@ -335,7 +376,7 @@ const AdminDashboard = () => {
             <Card className="border-border bg-card">
               <CardHeader>
                 <CardTitle className="text-foreground">
-                  {isDemoMode ? "Sample Loan Applications (5 Records)" : "Last 10 Applications"}
+                  Applicants
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -344,7 +385,7 @@ const AdminDashboard = () => {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                   </div>
                 ) : applications.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-12">No applications found.</p>
+                  <p className="text-center text-muted-foreground py-12">No loan applications submitted yet.</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>

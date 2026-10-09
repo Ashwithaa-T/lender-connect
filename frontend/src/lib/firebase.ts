@@ -1,6 +1,6 @@
 import { initializeApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { initializeFirestore, Firestore } from "firebase/firestore";
 
 const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
 const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
@@ -33,7 +33,13 @@ if (isConfigured) {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   try {
-    db = getFirestore(app);
+    db = initializeFirestore(
+      app,
+      {
+        ignoreUndefinedProperties: true,
+      },
+      "lender-connect"
+    );
   } catch (err) {
     console.warn("[Firebase] Firestore initialization error:", err);
   }

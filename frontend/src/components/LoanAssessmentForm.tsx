@@ -206,20 +206,43 @@ export const LoanAssessmentForm = () => {
         const storedList = storedRaw ? JSON.parse(storedRaw) : [];
         storedList.unshift(newAppRecord);
         localStorage.setItem("stored_loan_applications", JSON.stringify(storedList));
+
+        // Real-time broadcast: update any open Admin Dashboard tabs/windows instantly without refresh
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("loan_application_submitted", { detail: newAppRecord }));
+          if ("BroadcastChannel" in window) {
+            try {
+              const channel = new BroadcastChannel("lender_connect_apps");
+              channel.postMessage({ type: "APPLICATION_SUBMITTED", data: newAppRecord });
+              channel.close();
+            } catch (e) {
+              // ignore broadcast channel error
+            }
+          }
+        }
       } catch (storageErr) {
         console.warn("[Storage] Local persistence error:", storageErr);
       }
 
       // 2. Also save to cloud Firestore
       if (db) {
-        addDoc(collection(db, "loan_applications"), {
-          ...newAppRecord,
-          created_at: serverTimestamp(),
-        }).then((docRef) => {
-          console.log("[Firestore] Application successfully stored in cloud with ID:", docRef.id);
-        }).catch((err) => {
+        try {
+          // Sanitize to clean JSON to prevent undefined/non-serializable rejections
+          const sanitizedPayload = JSON.parse(JSON.stringify(newAppRecord));
+          
+          // Await Firestore with 3s timeout so it finishes writing before navigation unmounts the component
+          await Promise.race([
+            addDoc(collection(db, "loan_applications"), {
+              ...sanitizedPayload,
+              created_at: serverTimestamp(),
+            }).then((docRef) => {
+              console.log("[Firestore] Application successfully stored in cloud with ID:", docRef.id);
+            }),
+            new Promise((resolve) => setTimeout(resolve, 3000)),
+          ]);
+        } catch (err) {
           console.warn("[Firestore] Cloud save notice (saved locally in browser):", err);
-        });
+        }
       }
 
       toast({

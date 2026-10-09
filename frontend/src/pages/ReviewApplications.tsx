@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import Navigation from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
@@ -23,26 +23,90 @@ interface LoanApplication {
 }
 
 const ReviewApplications = () => {
-  const [applications, setApplications] = useState<LoanApplication[]>([]);
-  const [loading, setLoading] = useState(true);
+  const getStoredLocalApps = (): LoanApplication[] => {
+    try {
+      const stored = localStorage.getItem("stored_loan_applications");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const mergeApps = (cloud: LoanApplication[], local: LoanApplication[]): LoanApplication[] => {
+    const merged = [...cloud];
+    for (const loc of local) {
+      if (!merged.some(c => c.id === loc.id || (c.applicant_name === loc.applicant_name && c.loan_amount_requested === loc.loan_amount_requested))) {
+        merged.unshift(loc);
+      }
+    }
+    return merged;
+  };
+
+  const [applications, setApplications] = useState<LoanApplication[]>(getStoredLocalApps());
+  const [loading, setLoading] = useState(false);
   const { signOut } = useAuth();
   const navigate = useNavigate();
 
   const fetchApplications = async () => {
     setLoading(true);
+    const local = getStoredLocalApps();
+    if (!db) {
+      setApplications(local);
+      setLoading(false);
+      return;
+    }
     try {
-      const q = query(collection(db, "loan_applications"), orderBy("created_at", "desc"), limit(10));
+      const q = query(collection(db, "loan_applications"), orderBy("created_at", "desc"), limit(25));
       const querySnapshot = await getDocs(q);
       const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as LoanApplication[];
-      setApplications(data);
+      setApplications(mergeApps(data, local));
     } catch (error) {
-      console.error("Error fetching applications:", error);
+      console.warn("Error fetching applications:", error);
+      setApplications(local);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchApplications();
+    const local = getStoredLocalApps();
+    setApplications(prev => mergeApps(prev, local));
+
+    let unsubscribe: (() => void) | null = null;
+    if (db) {
+      try {
+        const q = query(collection(db, "loan_applications"), orderBy("created_at", "desc"), limit(25));
+        unsubscribe = onSnapshot(
+          q,
+          (snapshot) => {
+            const cloud = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as LoanApplication[];
+            const freshLocal = getStoredLocalApps();
+            setApplications(mergeApps(cloud, freshLocal));
+            setLoading(false);
+          },
+          (err) => {
+            console.warn("Realtime listener note:", err);
+            setApplications(getStoredLocalApps());
+            setLoading(false);
+          }
+        );
+      } catch (err) {
+        console.warn("Firestore setup note:", err);
+      }
+    }
+
+    const handleLocalUpdate = () => {
+      const freshLocal = getStoredLocalApps();
+      setApplications(prev => mergeApps(prev, freshLocal));
+    };
+
+    window.addEventListener("loan_application_submitted", handleLocalUpdate);
+    window.addEventListener("storage", handleLocalUpdate);
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+      window.removeEventListener("loan_application_submitted", handleLocalUpdate);
+      window.removeEventListener("storage", handleLocalUpdate);
+    };
   }, []);
 
   const getRiskBadge = (result: any) => {
