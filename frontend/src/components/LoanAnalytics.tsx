@@ -15,19 +15,28 @@ export interface LoanApplication {
 }
 
 export const LoanAnalytics = ({ customApplications }: { customApplications?: LoanApplication[] } = {}) => {
-  const [applications, setApplications] = useState<LoanApplication[]>([]);
-  const [loading, setLoading] = useState(true);
+  // If data is passed in by parent, start with it directly — no loading state needed
+  const hasCustomData = customApplications && customApplications.length > 0;
+  const [applications, setApplications] = useState<LoanApplication[]>(hasCustomData ? customApplications : []);
+  const [loading, setLoading] = useState(!hasCustomData);
 
   useEffect(() => {
     if (customApplications && customApplications.length > 0) {
+      // Data is already available — update synchronously, no spinner
       setApplications(customApplications);
       setLoading(false);
-    } else {
+    } else if (!customApplications) {
+      // Only hit Firestore if no parent data was provided at all
       fetchApplications();
+    } else {
+      // customApplications is an empty array — show empty state without spinning
+      setApplications([]);
+      setLoading(false);
     }
   }, [customApplications]);
 
   const fetchApplications = async () => {
+    setLoading(true);
     try {
       if (!db) {
         setLoading(false);

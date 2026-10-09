@@ -128,17 +128,6 @@ const DEMO_APPLICATIONS: LoanApplication[] = [
 ];
 
 const AdminDashboard = () => {
-  const [applications, setApplications] = useState<LoanApplication[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [accessDenied, setAccessDenied] = useState(false);
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
-
-  const isDemoParam = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "true";
-  const isGuestDemo = typeof window !== "undefined" && sessionStorage.getItem("isDemoAdmin") === "true";
-  const isPrimaryAdmin = user?.email === "tera.ashwithaareddy@gmail.com";
-  const isDemoMode = !isPrimaryAdmin || isDemoParam || isGuestDemo;
-
   const getStoredLocalApps = (): LoanApplication[] => {
     try {
       const stored = localStorage.getItem("stored_loan_applications");
@@ -147,6 +136,19 @@ const AdminDashboard = () => {
       return [];
     }
   };
+
+  // Pre-populate with local data immediately so Analytics tab is instant
+  const initialApps = getStoredLocalApps();
+  const [applications, setApplications] = useState<LoanApplication[]>(initialApps.length > 0 ? initialApps : []);
+  const [loading, setLoading] = useState(initialApps.length === 0);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const isDemoParam = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("demo") === "true";
+  const isGuestDemo = typeof window !== "undefined" && sessionStorage.getItem("isDemoAdmin") === "true";
+  const isPrimaryAdmin = user?.email === "tera.ashwithaareddy@gmail.com";
+  const isDemoMode = !isPrimaryAdmin || isDemoParam || isGuestDemo;
 
   const fetchApplications = async () => {
     setLoading(true);
